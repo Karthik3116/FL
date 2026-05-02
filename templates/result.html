@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Prediction Result &middot; {{ app_name }}{% endblock %}
+
+{% block content %}
+<section class="result-header">
+    <a href="{{ url_for('index') }}" class="back-link">&larr; New inference</a>
+    <h1>Prediction Result</h1>
+    <p class="muted">{{ filename }}</p>
+</section>
+
+<section class="result-grid">
+    <div class="card image-card">
+        <h3>Uploaded Image</h3>
+        <img class="full-img" src="{{ original_url }}" alt="Uploaded" />
+        <div class="image-sub">
+            <h4>Preprocessed (28&times;28)</h4>
+            <img class="thumb-img" src="{{ preview_data_url }}" alt="Preprocessed" />
+        </div>
+    </div>
+
+    <div class="card consensus-card">
+        <h3>Consensus</h3>
+        <div class="big-digit">{{ results.consensus.predicted_label }}</div>
+        <div class="agreement">
+            {{ results.consensus.agreement }} / {{ results.consensus.total_models }} models agree
+            {% if results.consensus.unanimous %}<span class="badge badge-good">Unanimous</span>{% endif %}
+        </div>
+        <div class="model-row global-row">
+            <h4>Global Model</h4>
+            <div class="prediction">
+                <span class="pred-label">{{ results.global.predicted_label }}</span>
+                <span class="pred-conf">{{ "%.1f"|format(results.global.confidence * 100) }}%</span>
+            </div>
+            <div class="prob-bars">
+                {% for prob in results.global.probabilities %}
+                    <div class="prob-row">
+                        <span class="prob-label">{{ class_names[loop.index0] }}</span>
+                        <div class="prob-track"><div class="prob-fill" style="width: {{ (prob * 100)|round(2) }}%"></div></div>
+                        <span class="prob-value">{{ "%.1f"|format(prob * 100) }}%</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="clients-grid">
+    {% for client in results.clients %}
+    <div class="card client-card">
+        <header class="client-header">
+            <h3>{{ client.name }}</h3>
+            <code>{{ client.source }}</code>
+        </header>
+        <div class="prediction">
+            <span class="pred-label">{{ client.predicted_label }}</span>
+            <span class="pred-conf">{{ "%.1f"|format(client.confidence * 100) }}%</span>
+        </div>
+        <div class="prob-bars compact">
+            {% for prob in client.probabilities %}
+                <div class="prob-row">
+                    <span class="prob-label">{{ class_names[loop.index0] }}</span>
+                    <div class="prob-track"><div class="prob-fill" style="width: {{ (prob * 100)|round(2) }}%"></div></div>
+                    <span class="prob-value">{{ "%.1f"|format(prob * 100) }}%</span>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endblock %}

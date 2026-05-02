@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-content">
+        <span class="eyebrow">Federated Learning Inference</span>
+        <h1>Run a digit through every model trained on your federation.</h1>
+        <p class="hero-sub">
+            Upload an image and compare predictions from the aggregated global model and each
+            participating client. The pipeline preprocesses uploads to MNIST format
+            (28&times;28 grayscale, normalized) and reports per-class probabilities for every model.
+        </p>
+    </div>
+    <div class="hero-stats">
+        <div class="stat-card">
+            <div class="stat-value">{{ info.num_clients if info else 3 }}</div>
+            <div class="stat-label">Client Models</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ info.num_classes if info else 10 }}</div>
+            <div class="stat-label">Output Classes</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ info.input_size if info else 28 }}px</div>
+            <div class="stat-label">Input Resolution</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ info.device if info else 'cpu' }}</div>
+            <div class="stat-label">Compute Device</div>
+        </div>
+    </div>
+</section>
+
+<section class="upload-section">
+    <form id="upload-form" class="upload-card" action="{{ url_for('predict') }}" method="POST" enctype="multipart/form-data">
+        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload image">
+            <input type="file" id="file-input" name="image" accept="image/*" hidden />
+            <div class="dropzone-empty" id="dropzone-empty">
+                <svg class="dropzone-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 16V4M12 4l-4 4M12 4l4 4" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <p class="dropzone-title">Drag &amp; drop a digit image</p>
+                <p class="dropzone-hint">or <span class="link">browse from your device</span></p>
+                <p class="dropzone-meta">PNG, JPG, BMP, WEBP &middot; up to 8 MB</p>
+            </div>
+            <div class="dropzone-preview" id="dropzone-preview" hidden>
+                <img id="preview-img" alt="Selected preview" />
+                <div class="preview-meta">
+                    <span id="preview-name"></span>
+                    <button type="button" id="clear-btn" class="btn-ghost">Remove</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" id="submit-btn" class="btn-primary" disabled>
+                <span class="btn-label">Run Inference</span>
+                <span class="btn-spinner" aria-hidden="true"></span>
+            </button>
+            <p class="form-help">All preprocessing &mdash; grayscale, auto-invert, center, normalize &mdash; happens server-side.</p>
+        </div>
+
+        <div id="form-error" class="form-error" hidden></div>
+    </form>
+
+    <aside class="info-panel">
+        <h3>Pipeline</h3>
+        <ol class="pipeline-list">
+            <li><span>1</span> Convert to grayscale</li>
+            <li><span>2</span> Auto-invert if background is light</li>
+            <li><span>3</span> Crop, scale, and center digit (MNIST style)</li>
+            <li><span>4</span> Normalize with &mu;=0.1307 / &sigma;=0.3081</li>
+            <li><span>5</span> Forward pass through all 4 models</li>
+        </ol>
+        {% if info %}
+        <h3 class="panel-title-secondary">Loaded Checkpoints</h3>
+        <ul class="checkpoint-list">
+            <li><strong>Global:</strong> <code>{{ info.global_path.split('/')[-1] }}</code></li>
+            {% for p in info.client_paths %}
+            <li><strong>Client {{ loop.index0 }}:</strong> <code>{{ p.split('/')[-1] }}</code></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="warning-box">
+            Models could not be located in <code>fl_outputs/models/</code>. Run the training script first.
+        </div>
+        {% endif %}
+    </aside>
+</section>
+
+<section id="results-section" class="results-section" hidden></section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Training Dashboard &middot; {{ app_name }}{% endblock %}
+
+{% block content %}
+<section class="dashboard-header">
+    <h1>Training Dashboard</h1>
+    <p class="muted">Snapshot of the federated training run that produced the current models.</p>
+</section>
+
+{% if metrics %}
+<section class="metric-grid">
+    <div class="metric-card">
+        <div class="metric-label">Final Global Accuracy</div>
+        <div class="metric-value">{{ "%.2f"|format(metrics.global_accuracy[-1]) }}%</div>
+        <div class="metric-trend">across {{ metrics.rounds|length }} rounds</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Final Global Loss</div>
+        <div class="metric-value">{{ "%.4f"|format(metrics.global_loss[-1]) }}</div>
+        <div class="metric-trend">cross-entropy</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Total Rounds</div>
+        <div class="metric-value">{{ metrics.rounds|length }}</div>
+        <div class="metric-trend">global aggregation cycles</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Total Training Time</div>
+        <div class="metric-value">{{ "%.1f"|format(metrics.round_time_sec|sum) }}s</div>
+        <div class="metric-trend">cumulative across rounds</div>
+    </div>
+</section>
+
+<section class="card table-card">
+    <h3>Per-Round Metrics</h3>
+    <div class="table-wrap">
+        <table class="metric-table">
+            <thead>
+                <tr><th>Round</th><th>Global Accuracy</th><th>Global Loss</th><th>Time (s)</th></tr>
+            </thead>
+            <tbody>
+                {% for r in metrics.rounds %}
+                <tr>
+                    <td>{{ r }}</td>
+                    <td>{{ "%.2f"|format(metrics.global_accuracy[loop.index0]) }}%</td>
+                    <td>{{ "%.4f"|format(metrics.global_loss[loop.index0]) }}</td>
+                    <td>{{ "%.2f"|format(metrics.round_time_sec[loop.index0]) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<div class="warning-box">No training metrics found in <code>fl_outputs/metrics/training_metrics.json</code>.</div>
+{% endif %}
+
+{% if plots %}
+<section class="plots-grid">
+    {% for plot in plots %}
+    <figure class="card plot-card">
+        <img src="{{ url_for('static', filename='plots/' + plot) }}" alt="{{ plot }}" />
+        <figcaption>{{ plot.replace('_', ' ').replace('.png','').title() }}</figcaption>
+    </figure>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% if info %}
+<section class="card runtime-card">
+    <h3>Runtime</h3>
+    <ul class="kv-list">
+        <li><span>Compute device</span><code>{{ info.device }}</code></li>
+        <li><span>Input size</span><code>{{ info.input_size }} &times; {{ info.input_size }}</code></li>
+        <li><span>Number of clients</span><code>{{ info.num_clients }}</code></li>
+        <li><span>Global checkpoint</span><code>{{ info.global_path.split('/')[-1] }}</code></li>
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

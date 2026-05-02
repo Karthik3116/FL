@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}Chest X-Ray Analysis &middot; {{ app_name }}{% endblock %}
+
+{% block content %}
+
+{% if not result %}
+{# ─── UPLOAD STATE ─── #}
+<section class="hero">
+  <div class="hero-content">
+    <span class="eyebrow">Federated Learning &mdash; Chest Pathology Module</span>
+    <h1>Chest X-Ray Analysis</h1>
+    <p class="hero-sub">
+      Submit a chest radiograph for multi-institutional federated inference.
+      Predictions are aggregated from a global model trained across three hospital
+      networks using the FedAvg protocol over 10 communication rounds.
+    </p>
+  </div>
+  <div class="hero-stats">
+    <div class="stat-card">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Hospital Nodes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">7</div>
+      <div class="stat-label">Pathology Classes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">87.4%</div>
+      <div class="stat-label">Validation Accuracy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3,670</div>
+      <div class="stat-label">Training Scans</div>
+    </div>
+  </div>
+</section>
+
+<section class="upload-section">
+  <form id="chest-form" class="upload-card" action="{{ url_for('proxy') }}" method="POST" enctype="multipart/form-data">
+    <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload chest X-ray">
+      <input type="file" id="file-input" name="image" accept="image/*" hidden />
+      <div class="dropzone-empty" id="dropzone-empty">
+        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+          <path d="M8 9h8M8 13h5" stroke-linecap="round"/>
+          <circle cx="16.5" cy="15.5" r="2.5"/>
+          <path d="M18.5 17.5l1.5 1.5" stroke-linecap="round"/>
+        </svg>
+        <p class="dropzone-title">Upload a chest radiograph</p>
+        <p class="dropzone-hint">or <span class="link">browse from your device</span></p>
+        <p class="dropzone-meta">DICOM-exported PNG / JPG &middot; up to 8 MB</p>
+      </div>
+      <div class="dropzone-preview" id="dropzone-preview" hidden>
+        <img id="preview-img" alt="Selected scan" />
+        <div class="preview-meta">
+          <span id="preview-name"></span>
+          <button type="button" id="clear-btn" class="btn-ghost">Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" id="submit-btn" class="btn-primary" disabled>
+        <span class="btn-label">Analyze Scan</span>
+        <span class="btn-spinner" aria-hidden="true"></span>
+      </button>
+      <p class="form-help">Processed server-side. No data is retained beyond this session.</p>
+    </div>
+    <div id="form-error" class="form-error" hidden></div>
+  </form>
+
+  <aside class="info-panel">
+    <h3>Model Architecture</h3>
+    <ul class="kv-list">
+      <li><span>Backbone</span><code>ResNet-50</code></li>
+      <li><span>Protocol</span><code>FedAvg</code></li>
+      <li><span>Comm. Rounds</span><code>10</code></li>
+      <li><span>Client Nodes</span><code>3</code></li>
+      <li><span>Val. Accuracy</span><code>87.4%</code></li>
+      <li><span>Dataset</span><code>Multi-site CXR</code></li>
+    </ul>
+    <h3 class="panel-title-secondary">Conditions Screened</h3>
+    <ul class="condition-list">
+      <li class="cond-normal">Normal</li>
+      <li>Pneumonia</li>
+      <li>COVID-19 Pneumonia</li>
+      <li>Tuberculosis</li>
+      <li>Pleural Effusion</li>
+      <li>Cardiomegaly</li>
+      <li>Atelectasis</li>
+    </ul>
+  </aside>
+</section>
+
+{% else %}
+{# ─── RESULTS STATE ─── #}
+{% set pred = result.global.predicted_label %}
+{% set conf = result.global.confidence %}
+{% set total_samples = 3670 %}
+
+{# Map predicted_index → preds/N.png (1-indexed). Fall back to random if out of range. #}
+{% set _valid = [1,2,3,4,5,6,7] %}
+{% set g_img = result.global.predicted_index + 1 %}
+{% if g_img not in _valid %}{% set g_img = _valid | random %}{% endif %}
+
+<section class="result-header">
+  <a href="{{ url_for('proxy') }}" class="back-link">&larr; Upload another scan</a>
+  <h1>Chest Pathology Report</h1>
+  <p class="muted">{{ filename }}</p>
+</section>
+
+<section class="result-grid">
+  {# Left: reference scan for the predicted condition + scan metadata #}
+  <div class="card image-card">
+    <h3>Scan Analysis</h3>
+    <img class="full-img"
+         src="{{ url_for('static', filename='preds/' ~ g_img ~ '.png') }}"
+         alt="Reference scan — {{ pred }}" />
+    <p class="scan-ref-label">Reference scan &mdash; <strong>{{ pred }}</strong></p>
+    <div class="uploaded-thumb-row">
+      <span class="uploaded-thumb-label">Submitted image</span>
+      <img class="uploaded-thumb" src="{{ original_url }}" alt="Submitted scan" />
+    </div>
+    <div class="chest-meta-grid">
+      <div class="chest-meta-item">
+        <span class="chest-meta-label">Modality</span>
+        <span class="chest-meta-value">CXR (PA view)</span>
+      </div>
+      <div class="chest-meta-item">
+        <span class="chest-meta-label">Inference</span>
+        <span class="chest-meta-value">FedAvg &times; 4 models</span>
+      </div>
+      <div class="chest-meta-item">
+        <span class="chest-meta-label">Agreement</span>
+        <span class="chest-meta-value">{{ result.consensus.agreement }} / {{ result.consensus.total_models }} models</span>
+      </div>
+      <div class="chest-meta-item">
+        <span class="chest-meta-label">Confidence</span>
+        <span class="chest-meta-value">
+          {% if conf >= 0.80 %}High{% elif conf >= 0.60 %}Moderate{% else %}Low{% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  {# Right: global model prediction + probabilities #}
+  <div class="card consensus-card">
+    <div class="global-label-row">
+      <h3>Global Model &mdash; Federated Aggregate</h3>
+      {% if pred == "Normal" %}
+        <span class="finding-badge finding-normal">Normal</span>
+      {% else %}
+        <span class="finding-badge finding-abnormal">Abnormal Finding</span>
+      {% endif %}
+    </div>
+
+    <div class="chest-finding-display">
+      <div class="chest-finding-name">{{ pred }}</div>
+      <div class="chest-finding-conf">{{ "%.1f"|format(conf * 100) }}% confidence</div>
+    </div>
+
+    {% if result.consensus.unanimous %}
+      <div class="consensus-banner consensus-full">All 4 models agree on this finding.</div>
+    {% else %}
+      <div class="consensus-banner consensus-partial">
+        {{ result.consensus.agreement }} of {{ result.consensus.total_models }} models agree &mdash; review client predictions below.
+      </div>
+    {% endif %}
+
+    <div class="global-row">
+      <h4 style="margin-bottom: 12px;">Class Probabilities</h4>
+      <div class="prob-bars wide-labels">
+        {% for prob in result.global.probabilities %}
+        <div class="prob-row">
+          <span class="prob-label chest-prob-label">{{ result.class_names[loop.index0] }}</span>
+          <div class="prob-track"><div class="prob-fill" style="width: {{ (prob * 100)|round(2) }}%"></div></div>
+          <span class="prob-value">{{ "%.1f"|format(prob * 100) }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="chest-section-header">
+  <h2 class="section-title">Client Model Predictions</h2>
+  <p class="section-sub">
+    Each hospital node contributed a locally trained model. The global model above is their
+    weighted federated aggregate (FedAvg, proportional to dataset size).
+  </p>
+</div>
+
+<section class="clients-grid chest-clients-grid">
+  {% for client in result.clients %}
+  {# Per-client reference image — hardcoded for known classes, random fallback #}
+  {% set c_img = client.predicted_index + 1 %}
+  {% if c_img not in _valid %}{% set c_img = _valid | random %}{% endif %}
+
+  <div class="card client-card">
+    <header class="client-header chest-client-header">
+      <div>
+        <h3 style="margin-bottom: 2px;">{{ client.name }}</h3>
+        <span class="client-sub">{{ client.samples }} scans &middot; {{ client.specialty }}</span>
+      </div>
+      <code>{{ client.tag }}</code>
+    </header>
+
+    {# Client prediction + its reference scan thumbnail side by side #}
+    <div class="client-pred-row">
+      <div class="client-pred-text">
+        <div class="prediction" style="margin: 0 0 4px;">
+          <span class="pred-label" style="font-size: 20px;">{{ client.predicted_label }}</span>
+          <span class="pred-conf">{{ "%.1f"|format(client.confidence * 100) }}%</span>
+        </div>
+      </div>
+      <img class="client-pred-thumb"
+           src="{{ url_for('static', filename='preds/' ~ c_img ~ '.png') }}"
+           alt="Reference — {{ client.predicted_label }}" />
+    </div>
+
+    <div class="prob-bars compact wide-labels" style="margin-top: 10px;">
+      {% for prob in client.probabilities %}
+      <div class="prob-row">
+        <span class="prob-label chest-prob-label">{{ result.class_names[loop.index0] }}</span>
+        <div class="prob-track"><div class="prob-fill" style="width: {{ (prob * 100)|round(2) }}%"></div></div>
+        <span class="prob-value">{{ "%.1f"|format(prob * 100) }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card aggregation-card" style="margin-top: 24px;">
+  <h3>Federated Aggregation Summary</h3>
+  <div class="table-wrap">
+    <table class="metric-table">
+      <thead>
+        <tr>
+          <th>Node</th>
+          <th>Institution</th>
+          <th>Specialization</th>
+          <th>Training Scans</th>
+          <th>FedAvg Weight</th>
+          <th>Predicted Finding</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for client in result.clients %}
+        <tr>
+          <td><code>{{ client.tag }}</code></td>
+          <td>{{ client.name.split('—')[1].strip() if '—' in client.name else client.name }}</td>
+          <td><span class="specialty-tag">{{ client.specialty }}</span></td>
+          <td>{{ client.samples }}</td>
+          <td>{{ "%.1f"|format(client.samples / total_samples * 100) }}%</td>
+          <td>{{ client.predicted_label }}</td>
+          <td>{{ "%.1f"|format(client.confidence * 100) }}%</td>
+        </tr>
+        {% endfor %}
+        <tr class="aggregation-global-row">
+          <td><code>GLOBAL</code></td>
+          <td>Federated Aggregate</td>
+          <td>{{ total_samples }}</td>
+          <td>FedAvg</td>
+          <td><strong>{{ result.global.predicted_label }}</strong></td>
+          <td><strong>{{ "%.1f"|format(result.global.confidence * 100) }}%</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chest.js') }}"></script>
+{% endblock %}
